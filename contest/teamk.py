@@ -194,7 +194,8 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
         If a PacMan agent is daring enough, the defensive agent labels it as an invader and
         determines its position relative to its own. It also considers any available paths and 
         compares the distance between those paths and the enemy's position with the distance between 
-        its own position and the enemy's. Then, our defensive agent goes in for the kill!
+        its own position and the enemy's. Once a path has been chosen, our defensive agent goes in 
+        for the kill!
     """
     
     def getFeatures(self, gameState, action):
