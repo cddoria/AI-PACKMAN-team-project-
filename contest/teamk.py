@@ -22,15 +22,15 @@
 
 from captureAgents import CaptureAgent
 import distanceCalculator
-import random, time, util, sys
 from game import Directions
 import game
+import random, time, util, sys
 from util import nearestPoint
+
 
 #################
 # Team creation #
 #################
-
 def createTeam(firstIndex, secondIndex, isRed,
                first = 'OffensiveReflexAgent', second = 'DefensiveReflexAgent'):
   """
@@ -166,27 +166,97 @@ class ReflexCaptureAgent(CaptureAgent):
 
 class OffensiveReflexAgent(ReflexCaptureAgent):
     """
-    A reflex agent that seeks food. This is an agent
-    we give you to get an idea of what an offensive agent might look like,
-    but it is by no means the best or only way to build an offensive agent.
+        If an enemy is a ghost, the offensive agent labels it as a defender and determines its position 
+        relative to its own. It also considers the position of the closest food relative to its own. It 
+        checks the food list and if the distance from offensive agent to the closest food is less than 
+        the distance to half the distance of the closest defender, then it goes for the food.
     """
     
     def getFeatures(self, gameState, action):
         features = util.Counter()
         successor = self.getSuccessor(gameState, action)
+        current_state = successor.getAgentState(self.index)
+        current_position = current_state.getPosition()
         foodList = self.getFood(successor).asList()    
         features['successorScore'] = -len(foodList)#self.getScore(successor)
-    
+        better = 999
+        
+        enemies = []
+        
+        #Check the indices of the opponents...
+        for agent in self.getOpponents(successor):
+            #Add opponents to list of enemies
+            enemies.append(successor.getAgentState(agent))
+            
+        defenders = []
+        
+        #Check enemies...    
+        for enemy in enemies:        
+            #If there is an enemy position that we can see...
+            if not enemy.isPacman and enemy.getPosition() != None:
+                #Add that enemy to the list of defenders
+                defenders.append(enemy)
+                features['numDefenders'] = len(defenders)
+        
+        distances_to_defenders = []
+                
+        #If there is a defender...
+        if len(defenders) > 0:
+            #Check the indices of defenders...
+            for d in defenders:  
+                #Find the shortest distance to the defender from current position and add to list of defender distances      
+                distances_to_defenders.append(self.getMazeDistance(current_position, d.getPosition()))
+                features['defenderDistance'] = min(distances_to_defenders)
+        
+        distances_to_food = []
+        
         # Compute distance to the nearest food
-    
         if len(foodList) > 0: # This should always be True,  but better safe than sorry
-          myPos = successor.getAgentState(self.index).getPosition()
-          minDistance = min([self.getMazeDistance(myPos, food) for food in foodList])
-          features['distanceToFood'] = minDistance
-        return features
+            for food in foodList:
+                distances_to_food.append(self.getMazeDistance(current_position, food))
+                features['distanceToFood'] = min(distances_to_food)
+        
+        #Check food and determine the location to intercept        
+        for food in foodList:
+            if distances_to_food < ((1/2) * distances_to_defenders):
+                #Set the distance equal to the distance from the current position to the food
+                distances_to_food = self.getMazeDistance(current_position, food)
+                
+                #If a distance is less than the value of the more important area... 
+                if distances_to_food < better:
+                    #Set the value of the more important area equal to that distance
+                    better = distances_to_food
+                    
+                #Set the point of interception to that food
+                intercept = food
+            
+            if distances_to_food < 9 and distances_to_food <= better and intercept != 0:
+                #Go to that point to intercept
+                self.goto = intercept
+                
+        features['distanceToGoal'] = self.getMazeDistance(current_position, self.goto)
+        
+        #If the agent is at the goto point...
+        if self.getMazeDistance(current_position, self.goto) == 0:
+            #The defensive agent (on either team) will continue patrolling that area
+            if self.index == max(gameState.getRedTeamIndices()) or self.index == max(gameState.getBlueTeamIndices()):
+                self.goto = self.valid_paths[5 * len(self.valid_paths) / 6]
+            else:
+                self.goto = self.valid_paths[1 * len(self.valid_paths) / 6]
+        
+        if action == Directions.STOP:
+            features['stop'] = 1
+            
+        rev = Directions.REVERSE[gameState.getAgentState(self.index).configuration.direction]
+        
+        if action == rev:
+            features['reverse'] = 1
+        
+        return features            
 
     def getWeights(self, gameState, action):
-        return {'successorScore': 100, 'distanceToFood': -1}
+        return {'successorScore': 100, 'onDefense': 100, 'distanceToFood': -1, 'numDefenders': -1000, 'defenderDistance': -10,
+                 'distanceToGoal': -1, 'stop': -100, 'reverse': -2}
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
     """
@@ -203,7 +273,7 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
         successor = self.getSuccessor(gameState, action)
         current_state = successor.getAgentState(self.index)
         current_position = current_state.getPosition()
-        more_important = 9999
+        better = 999
         
         # Computes whether we're on defense (1) or offense (0)
         features['onDefense'] = 1
@@ -250,9 +320,9 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
                     distances = self.getMazeDistance(path, e.getPosition())
                     
                     #If a distance is less than the value of the more important area... 
-                    if distances < more_important:
+                    if distances < better:
                         #Set the value of the more important area equal to that distance
-                        more_important = distances
+                        better = distances
                         
                     #Set the point of interception to that path
                     intercept = path
@@ -260,7 +330,7 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
                 If distance is less than 9 and greater than or equal to the value of the more important area and
                 the agent has a path to intercept...
             """
-            if distances < 9 and distances <= more_important and intercept != 0:
+            if distances < 9 and distances <= better and intercept != 0:
                 #Go to that point to intercept
                 self.goto = intercept
                 
