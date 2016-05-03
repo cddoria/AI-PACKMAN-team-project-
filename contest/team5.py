@@ -26,7 +26,6 @@ from game import Directions
 import game
 import random, time, util, sys
 from util import nearestPoint
-from winerror import SUCCEEDED
 
 
 #################
@@ -177,9 +176,6 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         checks the food list and if the distance from offensive agent to the closest food is less than 
         the distance to half the distance of the closest defender, then it goes for the food.
     """ 
-    def registerInitialState(self, gameState):
-        self.food_count = 0
-        self.goal_food_count = 4 
     
     def getFeatures(self, gameState, action):
         features = util.Counter()
