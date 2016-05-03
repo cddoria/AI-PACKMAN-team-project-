@@ -26,6 +26,7 @@ from game import Directions
 import game
 import random, time, util, sys
 from util import nearestPoint
+from winerror import SUCCEEDED
 
 
 #################
@@ -70,7 +71,7 @@ class ReflexCaptureAgent(CaptureAgent):
         #Pathways on agent's side of grid
         self.valid_paths = []
         
-        #Set the offset from the middle of the grid
+        #Set the offset for each agent from the middle of the grid
         if self.red:
             offset = -3
         else:
@@ -91,6 +92,11 @@ class ReflexCaptureAgent(CaptureAgent):
         
         #Point the agent needs to go to
         self.goto = (x, y)
+        
+        self.o_weights = {'successorScore': 100,'distanceToFood': -1, 'numDefenders': -1000, 'defenderDistance': -10, 
+                          'distanceToGoal': -1, 'stop': -100, 'reverse': -2}
+        self.d_weights = {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -10, 'distanceToGoal': -1, 
+                          'stop': -100, 'reverse': -2}
     
     def chooseAction(self, gameState):
         """
@@ -106,7 +112,7 @@ class ReflexCaptureAgent(CaptureAgent):
         maxValue = max(values)
         bestActions = [a for a, v in zip(actions, values) if v == maxValue]
         
-        foodLeft = len(self.getFood(gameState).asList())
+        """foodLeft = len(self.getFood(gameState).asList())
         
         if foodLeft <= 2:
             bestDist = 9999
@@ -117,7 +123,7 @@ class ReflexCaptureAgent(CaptureAgent):
             if dist < bestDist:
                 bestAction = action
                 bestDist = dist
-            return bestAction
+            return bestAction"""
         
         return random.choice(bestActions)
     
@@ -170,7 +176,10 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         relative to its own. It also considers the position of the closest food relative to its own. It 
         checks the food list and if the distance from offensive agent to the closest food is less than 
         the distance to half the distance of the closest defender, then it goes for the food.
-    """
+    """ 
+    def registerInitialState(self, gameState):
+        self.food_count = 0
+        self.goal_food_count = 4 
     
     def getFeatures(self, gameState, action):
         features = util.Counter()
@@ -180,16 +189,19 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         foodList = self.getFood(successor).asList()    
         features['successorScore'] = -len(foodList)#self.getScore(successor)
         better = 999
-        
         enemies = []
+        defenders = []
+        distances_to_defenders = []
+        distances_to_food = []
         
+        """
+            Play Offensively
+        """
         #Check the indices of the opponents...
         for agent in self.getOpponents(successor):
             #Add opponents to list of enemies
             enemies.append(successor.getAgentState(agent))
             
-        defenders = []
-        
         #Check enemies...    
         for enemy in enemies:        
             #If there is an enemy position that we can see...
@@ -197,8 +209,6 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
                 #Add that enemy to the list of defenders
                 defenders.append(enemy)
                 features['numDefenders'] = len(defenders)
-        
-        distances_to_defenders = []
                 
         #If there is a defender...
         if len(defenders) > 0:
@@ -208,8 +218,6 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
                 distances_to_defenders.append(self.getMazeDistance(current_position, d.getPosition()))
                 features['defenderDistance'] = min(distances_to_defenders)
         
-        distances_to_food = []
-        
         # Compute distance to the nearest food
         if len(foodList) > 0: # This should always be True,  but better safe than sorry
             for food in foodList:
@@ -218,7 +226,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         
         #Check food and determine the location to intercept        
         for food in foodList:
-            if distances_to_food < ((1/2) * distances_to_defenders):
+            if distances_to_food < distances_to_defenders:
                 #Set the distance equal to the distance from the current position to the food
                 distances_to_food = self.getMazeDistance(current_position, food)
                 
@@ -238,7 +246,8 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         
         #If the agent is at the goto point...
         if self.getMazeDistance(current_position, self.goto) == 0:
-            #The defensive agent (on either team) will continue patrolling that area
+            self.food_count = self.food_count + 1                
+            
             if self.index == max(gameState.getRedTeamIndices()) or self.index == max(gameState.getBlueTeamIndices()):
                 self.goto = self.valid_paths[5 * len(self.valid_paths) / 6]
             else:
@@ -252,11 +261,10 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         if action == rev:
             features['reverse'] = 1
         
-        return features            
+        return features           
 
     def getWeights(self, gameState, action):
-        return {'successorScore': 100, 'onDefense': 100, 'distanceToFood': -1, 'numDefenders': -1000, 'defenderDistance': -10,
-                 'distanceToGoal': -1, 'stop': -100, 'reverse': -2}
+        return self.o_weights
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
     """
@@ -369,5 +377,4 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
         return features
     
     def getWeights(self, gameState, action):
-        return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -10, 'distanceToGoal': -1, 
-                'stop': -100, 'reverse': -2}
+        return self.d_weights
